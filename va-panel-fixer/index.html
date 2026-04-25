@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VA Panel Fixer — Eye Tracking Display Compensator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- FULLSCREEN OVERLAY — this corrects the display -->
+<div id="display-overlay"></div>
+
+<!-- MAIN UI -->
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="url(#g1)" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="url(#g2)"/><circle cx="16" cy="11" r="2" fill="#fff" opacity="0.9"/><defs><linearGradient id="g1" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#a855f7"/></linearGradient><linearGradient id="g2" x1="10" y1="10" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs></svg>
+      </div>
+      <div class="logo-text">
+        <span class="logo-name">VA Panel Fixer</span>
+        <span class="logo-sub">IPS-Like View Compensator</span>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Initializing...</span>
+    </div>
+    <div class="camera-selector-wrap">
+      <select id="camera-select" class="camera-select">
+        <option value="">Default Camera</option>
+      </select>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="btn-minimize" title="Hide UI (keep tracking)">
+        <svg viewBox="0 0 20 20" fill="none"><rect x="4" y="9" width="12" height="2" rx="1" fill="currentColor"/></svg>
+      </button>
+      <button class="btn-icon" id="btn-toggle" title="Toggle Correction">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M10 3v4M10 13v4M3 10h4M13 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main id="main">
+
+    <!-- Left: Camera Preview -->
+    <section class="panel panel-camera">
+      <div class="panel-title">
+        <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="11" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M7 5V4a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5"/></svg>
+        Live Feed
+      </div>
+      <div class="camera-wrap" id="camera-wrap">
+        <video id="webcam" autoplay muted playsinline></video>
+        <canvas id="face-canvas"></canvas>
+        <div class="camera-overlay" id="camera-overlay">
+          <div class="scan-line"></div>
+          <div class="corner tl"></div>
+          <div class="corner tr"></div>
+          <div class="corner bl"></div>
+          <div class="corner br"></div>
+        </div>
+        <div class="no-face-msg" id="no-face-msg">
+          <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2" opacity="0.3"/><circle cx="14" cy="18" r="2" fill="currentColor" opacity="0.5"/><circle cx="26" cy="18" r="2" fill="currentColor" opacity="0.5"/><path d="M14 27c1.5 2 10.5 2 12 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/></svg>
+          <span>No Face Detected</span>
+        </div>
+        <div class="tracking-hud">
+          <div class="hud-dot" id="hud-dot"></div>
+          <span id="tracking-status">INITIALIZING</span>
+        </div>
+        <div id="debug-view" class="hidden"></div>
+      </div>
+      <!-- FPS Counter -->
+      <div class="fps-row">
+        <span class="fps-label">Response Rate</span>
+        <span class="fps-value" id="fps-display">-- fps</span>
+        <span class="fps-latency" id="latency-display">-- ms</span>
+      </div>
+    </section>
+
+    <!-- Center: Head Position Visualizer -->
+    <section class="panel panel-tracker">
+      <div class="panel-title">
+        <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="10" r="2" fill="currentColor"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Head Position
+      </div>
+
+      <!-- 2D position grid -->
+      <div class="position-grid-wrap">
+        <div class="position-grid" id="position-grid">
+          <div class="grid-label top">Too High</div>
+          <div class="grid-label bottom">Too Low</div>
+          <div class="grid-label left">Left</div>
+          <div class="grid-label right">Right</div>
+          <div class="grid-center-ring"></div>
+          <div class="grid-crosshair-h"></div>
+          <div class="grid-crosshair-v"></div>
+          <div class="position-dot" id="position-dot">
+            <div class="dot-inner"></div>
+          </div>
+          <div class="ideal-zone" id="ideal-zone"></div>
+        </div>
+      </div>
+
+      <!-- Angle readings -->
+      <div class="angle-readings">
+        <div class="angle-item">
+          <span class="angle-label">Vertical</span>
+          <div class="angle-bar-wrap">
+            <div class="angle-bar" id="v-bar"><div class="angle-fill v-fill" id="v-fill"></div></div>
+          </div>
+          <span class="angle-val" id="v-angle">0°</span>
+        </div>
+        <div class="angle-item">
+          <span class="angle-label">Horizontal</span>
+          <div class="angle-bar-wrap">
+            <div class="angle-bar" id="h-bar"><div class="angle-fill h-fill" id="h-fill"></div></div>
+          </div>
+          <span class="angle-val" id="h-angle">0°</span>
+        </div>
+        <div class="angle-item">
+          <span class="angle-label">Distance</span>
+          <div class="angle-bar-wrap">
+            <div class="angle-bar"><div class="angle-fill d-fill" id="d-fill"></div></div>
+          </div>
+          <span class="angle-val" id="d-val">--</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Correction Controls -->
+    <section class="panel panel-controls">
+      <div class="panel-title">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M3 10h14M10 3l7 7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Correction Values
+      </div>
+
+      <!-- Live correction meters -->
+      <div class="correction-meters">
+        <div class="meter-item">
+          <div class="meter-icon brightness">☀</div>
+          <div class="meter-info">
+            <span class="meter-label">Brightness</span>
+            <div class="meter-track">
+              <div class="meter-fill brightness-fill" id="m-brightness"></div>
+              <div class="meter-center"></div>
+            </div>
+          </div>
+          <span class="meter-val" id="val-brightness">0%</span>
+        </div>
+        <div class="meter-item gamma-meter">
+          <div class="meter-icon gamma">γ</div>
+          <div class="meter-info">
+            <span class="meter-label">Gamma</span>
+            <div class="meter-track">
+              <div class="meter-fill gamma-fill" id="m-gamma"></div>
+              <div class="meter-center"></div>
+            </div>
+          </div>
+          <span class="meter-val" id="val-gamma">1.0</span>
+        </div>
+        <div class="meter-item">
+          <div class="meter-icon contrast">◑</div>
+          <div class="meter-info">
+            <span class="meter-label">Contrast</span>
+            <div class="meter-track">
+              <div class="meter-fill contrast-fill" id="m-contrast"></div>
+              <div class="meter-center"></div>
+            </div>
+          </div>
+          <span class="meter-val" id="val-contrast">100%</span>
+        </div>
+        <div class="meter-item">
+          <div class="meter-icon saturation">◈</div>
+          <div class="meter-info">
+            <span class="meter-label">Saturation</span>
+            <div class="meter-track">
+              <div class="meter-fill sat-fill" id="m-sat"></div>
+              <div class="meter-center"></div>
+            </div>
+          </div>
+          <span class="meter-val" id="val-sat">100%</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Settings -->
+      <div class="settings-section">
+        <div class="setting-row">
+          <label class="setting-label">Sensitivity</label>
+          <div class="slider-wrap">
+            <input type="range" id="sensitivity" class="slider" min="1" max="10" value="4">
+            <span class="slider-val" id="sensitivity-val">4</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">Smoothing</label>
+          <div class="slider-wrap">
+            <input type="range" id="smoothing" class="slider" min="1" max="10" value="4">
+            <span class="slider-val" id="smoothing-val">4</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">Max Correction</label>
+          <div class="slider-wrap">
+            <input type="range" id="max-correction" class="slider" min="10" max="60" value="35">
+            <span class="slider-val" id="max-correction-val">35%</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">Field of View</label>
+          <div class="slider-wrap">
+            <input type="range" id="fov" class="slider" min="30" max="100" value="100">
+            <span class="slider-val" id="fov-val">100%</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">Stability Deadzone</label>
+          <div class="slider-wrap">
+            <input type="range" id="deadzone" class="slider" min="0" max="25" value="10">
+            <span class="slider-val" id="deadzone-val">10%</span>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle-item">
+            <input type="checkbox" id="invert-v">
+            <span>Invert Vertical</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="invert-h">
+            <span>Invert Horizontal</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Mode buttons -->
+      <div class="mode-row">
+        <button class="mode-btn active" id="mode-auto" data-mode="auto">
+          <span class="mode-icon">⚡</span> Auto
+        </button>
+        <button class="mode-btn" id="mode-dark" data-mode="dark">
+          <span class="mode-icon">🌙</span> Dark Room
+        </button>
+        <button class="mode-btn" id="mode-bright" data-mode="bright">
+          <span class="mode-icon">☀️</span> Bright Room
+        </button>
+      </div>
+
+      <button class="btn-calibrate" id="btn-calibrate">
+        <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v3M10 15v3M2 10h3M15 10h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Calibrate Position
+      </button>
+    </section>
+
+  </main>
+
+  <!-- Bottom bar -->
+  <div class="bottom-bar">
+    <div class="bottom-stat">
+      <span class="bs-label">Mode</span>
+      <span class="bs-val" id="bs-mode">Auto</span>
+    </div>
+    <div class="bottom-stat">
+      <span class="bs-label">Correction Active</span>
+      <span class="bs-val" id="bs-active">Yes</span>
+    </div>
+    <div class="bottom-stat">
+      <span class="bs-label">Filter Strength</span>
+      <span class="bs-val" id="bs-strength">--</span>
+    </div>
+    <div class="bottom-stat">
+      <span class="bs-label">Panel Type</span>
+      <span class="bs-val">VA → IPS-Like</span>
+    </div>
+    <div class="version-tag">v1.0 · VA Panel Fixer</div>
+  </div>
+
+</div>
+
+<!-- Calibration Overlay -->
+<div id="calibration-overlay" class="hidden">
+  <div class="cal-box">
+    <div class="cal-icon">
+      <svg viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="28" stroke="url(#cg)" stroke-width="2"/><circle cx="30" cy="30" r="10" stroke="url(#cg)" stroke-width="2"/><path d="M30 2v8M30 50v8M2 30h8M50 30h8" stroke="url(#cg)" stroke-width="2" stroke-linecap="round"/><circle cx="30" cy="30" r="3" fill="url(#cg)"/><defs><linearGradient id="cg" x1="0" y1="0" x2="60" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs></svg>
+    </div>
+    <h2>Calibrating...</h2>
+    <p>Sit in your <strong>ideal viewing position</strong>.<br>Look directly at the screen.</p>
+    <div class="cal-progress">
+      <div class="cal-progress-fill" id="cal-fill"></div>
+    </div>
+    <span class="cal-count" id="cal-count">3</span>
+  </div>
+</div>
+
+<!-- Minimized floating widget -->
+<div id="mini-widget" class="hidden">
+  <div class="mini-eye">
+    <div class="mini-iris" id="mini-iris"></div>
+  </div>
+  <div class="mini-info">
+    <span id="mini-fps">-- fps</span>
+    <span id="mini-status">Active</span>
+  </div>
+  <button class="mini-expand" id="mini-expand" title="Expand">⬆</button>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="app.js"></script>
+</body>
+</html>
